@@ -7,6 +7,7 @@ library(shiny)
 library(bslib)
 library(ggplot2)
 library(readr)
+library(rsconnect)
 
 # Global variables for app
 locations <- c("Pretoria, South Africa", "Taichung, Taiwan", "Tainan, Taiwan", "Delhi, India", 
@@ -529,3 +530,4 @@ server <- function(input, output, session) {
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+#shiny::runGitHub('maia_shiny','mariacardelino', ref="main")
