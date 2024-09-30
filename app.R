@@ -7,6 +7,7 @@ library(shiny)
 library(bslib)
 library(ggplot2)
 library(readr)
+library(rsconnect)
 
 # Global variables for app
 locations <- c("Pretoria, South Africa", "Taichung, Taiwan", "Tainan, Taiwan", "Delhi, India", 
@@ -76,7 +77,7 @@ ui <- navbarPage(
           
         mainPanel(
           plotOutput("pm25_plot"), #timeseries to match the table stats
-          uiOutput("tableUI"),  # Table to display filtered stats
+          uiOutput("tableUI")  # Table to display filtered stats
           
         )
       )
@@ -94,7 +95,7 @@ ui <- navbarPage(
                        choices = list(
                          "Summary table for filters (for selected location)" = "gravi_table",
                          "Scatterplot of Continuous vs. Gravimetric concentrations (for selected location)" = "combined_plot",
-                         "All-location count and calendar for processed filters" = "calendar"
+                         "All-location summary processed filters" = "gravi_sum"
                        ),
                        selected = "gravi_table")
         ),
@@ -103,6 +104,18 @@ ui <- navbarPage(
         )
       )
     )
+  ), 
+  # Panel 4: Calendars
+  tabPanel(
+    "Temporal Coverage",
+    fluidPage(tagList(
+      wellPanel(
+        style = "border: 1px solid #000; padding: 10px;",
+        h4("Temporal Coverage of Gravimetric Filters by Location and Device"),
+        plotOutput("gcalendar", height = 800) 
+        )
+              )
+      )
   )
 ) #end UI section
 
@@ -276,26 +289,44 @@ server <- function(input, output, session) {
     if (length(unique_devices) >= 2) {
       pm_data_device1 <- selected_data %>%
         filter(device == unique_devices[1]) %>%
-        select(time, pm_device1 = pm)
+        select(time, pm_device1 = pm, flow1 = flow)
       
       pm_data_device2 <- selected_data %>%
         filter(device == unique_devices[2]) %>%
-        select(time, pm_device2 = pm)
+        select(time, pm_device2 = pm, flow2 = flow)
       
+      # Merge the data
       merged_pm_data <- inner_join(pm_data_device1, pm_data_device2, by = "time")
       
-      ggplot(merged_pm_data, aes(x = pm_device1, y = pm_device2)) +
+      # Create a new column for color based on the condition for both flow rates
+      merged_pm_data <- merged_pm_data %>%
+        mutate(color = ifelse(flow1 >= 1 & flow2 >= 1, "Both Pumps On", "At Least One Pump Off"))
+      
+      # Calculate R-squared for both groups
+      r_squared_both_on <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Both Pumps On")))$r.squared
+      r_squared_one_off <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "At Least One Pump Off")))$r.squared
+      
+      ggplot(merged_pm_data, aes(x = pm_device1, y = pm_device2, color = color)) +
         geom_point() +
         labs(title = paste("Device", unique_devices[2], "vs.", unique_devices[1]),
              x = paste("PM2.5 Concentration (µg/m³), Device", unique_devices[1]),
              y = paste("PM2.5 Concentration (µg/m³), Device", unique_devices[2])) +
         geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
-        theme_grey()
+        theme_grey() +
+        # Add the R-squared annotations to the plot
+        annotate("text", x = Inf, y = Inf, 
+                 label = paste("R² (Both Pumps On) =", round(r_squared_both_on, 3), "\nR² (At Least One Pump Off) =", round(r_squared_one_off, 3)), 
+                 hjust = 1.1, vjust = 1.5, 
+                 size = 5, color = "black", 
+                 fontface = "bold") +
+        scale_color_manual(values = c("Both Pumps On" = "blue", "At Least One Pump Off" = "red")) +
+        theme(legend.title = element_blank())
     } else {
       ggplot() + geom_blank() +
         labs(title = "Not enough devices for comparison")
     }
   })
+  
   
   
   
@@ -376,39 +407,31 @@ server <- function(input, output, session) {
   #uiOutput: gravipanelUI (all choices), gravi_choice
   #choices: "gravi_table", "combined_plot", "calendar"
   
-  # User selection combined UI #####
-  output$gravipanelUI <- renderUI({
-    #timeseries
-    if (input$gravi_choice == "gravi_table") {
-      tagList(
-        h4("Gravimetric Filters Analyzed from Selected Location"),
-        uiOutput("gtable")  
-      )
-    } else if (input$gravi_choice == "combined_plot") {
-      tagList(
-        wellPanel(
-          style = "border: 1px solid #000; padding: 10px;",
-          h4("Continuous Vs. Gravimetric PM2.5 Concentration at Selected Location"),
-          plotOutput("combinedgplot") 
+    # User selection combined UI #####
+    output$gravipanelUI <- renderUI({
+      # Timeseries
+      if (input$gravi_choice == "gravi_table") {
+        tagList(
+          h4("Gravimetric Filters Analyzed from Selected Location"),
+          uiOutput("gtable")
         )
-      )
-    } else if (input$gravi_choice == "calendar") {
-      tagList(
-        h4("All-location Summary Statistics"),
-        uiOutput("sumtable"),
-        br(),
-        wellPanel(
-          style = "border: 1px solid #000; padding: 10px;",
-          h4("Calendar of All Processed Gravimetric Filters By Device"),
-          plotOutput("gcalendar")) #,
-       #  br(),
-       #  wellPanel(
-       #    style = "border: 1px solid #000; padding: 10px;",
-       #    h4("Calendar of All Data By Method"),
-       #    plotOutput("allcalendar")),
-      )
-    } 
-  }) #end gravimetric panel UI
+      } else if (input$gravi_choice == "combined_plot") {
+        tagList(
+          wellPanel(
+            style = "border: 1px solid #000; padding: 10px;",
+            h4("Continuous Vs. Gravimetric PM2.5 Concentration at All Locations"),
+            plotOutput("combinedgplot"),
+            textOutput("cutoff_message")
+          )
+        )
+      } else if (input$gravi_choice == "gravi_sum") {
+        tagList(
+          h4("All-location Summary Statistics"),
+          uiOutput("sumtable")
+        )
+      }
+    })
+    
   
   # Option 1: table of data by selected location
   output$gtable <- renderTable({
@@ -423,32 +446,68 @@ server <- function(input, output, session) {
 
   })
   
-  # Option 2: Continuous vs. gravimetric
+  # Option 2: Continuous vs. gravimetric scatterplot
   #Datasets: all_grav and all_daily
+  # Option 2: Continuous vs. gravimetric scatterplot
   output$combinedgplot <- renderPlot({
     
-    filtered_all_daily <- all_daily %>% 
-      filter(location == input$location)
-    
+    filtered_all_daily <- all_daily 
     filtered_all_grav <- all_grav %>%
-      filter(Location == input$location) %>%
       rename(grav = "PM2.5 Concentration (µg/m³)")
-  
-  matched_data <- filtered_all_grav %>%
-    inner_join(filtered_all_daily, by = c("Day" = "day", `Filter ID` = "filter")) 
- 
-  p <- ggplot(matched_data, aes(x = grav, y = daily_mean_pm, color = device)) +
-    geom_point(size = 2.5) +
-    geom_vline(xintercept = 12, linetype = "dashed", color = "gray", size = 0.5) +
-    geom_hline(yintercept = 12, linetype = "dashed", color = "gray", size = 0.5) +
-    annotate("segment", x = 0, y = 0, xend = 200, yend = 200, color = "gray") +  # Fixed segment for diagonal line
-    labs(title = "Daily Averaged Continuous PM2.5 vs. Daily Gravimetric PM2.5 Concentrations",
-         x = "Daily Gravimetric Concentration (µg/m³)",
-         y = "Daily Averaged Continuous PM2.5 (µg/m³)",
-         color = "Device")+
-    scale_colour_brewer(palette = "Set1")
-  p #maybe change to include all if there are too little points for each location?
+    
+    matched_data <- filtered_all_grav %>%
+      inner_join(filtered_all_daily, by = c("Day" = "day", `Filter ID` = "filter")) 
+    
+    # Identify points that will be cut off
+    cut_off_data <- matched_data %>%
+      filter(grav > 200 | daily_mean_pm > 200)
+    
+    # Create the plot
+    p <- ggplot(matched_data, aes(x = grav, y = daily_mean_pm, color = Location)) +
+      geom_point(size = 2.5) +
+      geom_vline(xintercept = 12, linetype = "dashed", color = "gray", size = 0.5) +
+      geom_hline(yintercept = 12, linetype = "dashed", color = "gray", size = 0.5) +
+      annotate("segment", x = 0, y = 0, xend = 200, yend = 200, color = "gray") +  # Fixed segment for diagonal line
+      labs(title = "Daily Averaged Continuous PM2.5 vs. Daily Gravimetric PM2.5 Concentrations",
+           x = "Daily Gravimetric Concentration (µg/m³)",
+           y = "Daily Averaged Continuous PM2.5 (µg/m³)",
+           color = "Location") +
+      scale_colour_brewer(palette = "Set1") +
+      xlim(0, 200) +  # Limit x-axis
+      ylim(0, 200)    # Limit y-axis
+    
+    print(p)  # Print the plot
   })
+  
+  # Reactive expression to capture cut-off message
+  cutoff_message <- reactive({
+    filtered_all_daily <- all_daily 
+    filtered_all_grav <- all_grav %>%
+      rename(grav = "PM2.5 Concentration (µg/m³)")
+    
+    matched_data <- filtered_all_grav %>%
+      inner_join(filtered_all_daily, by = c("Day" = "day", `Filter ID` = "filter")) 
+    
+    # Identify points that will be cut off
+    cut_off_data <- matched_data %>%
+      filter(grav > 200 | daily_mean_pm > 200)
+    
+    if (nrow(cut_off_data) > 0) {
+      locations_cut_off <- unique(cut_off_data$Location)
+      message <- paste("Points cut off from the following locations:", 
+                       paste(locations_cut_off, collapse = "; "))
+    } else {
+      message <- "No points were cut off."
+    }
+    
+    return(message)
+  })
+  
+  # Render the message in the UI
+  output$cutoff_message <- renderText({
+    cutoff_message()  # Call the reactive expression to get the message
+  })
+  
   
   #Option 3: Calendar and summary statistics
   #summary table; all summary data
@@ -465,7 +524,9 @@ server <- function(input, output, session) {
   grav_summary 
   })
   
-  #calendar; all gravimetric data
+  
+  #PANEL 4: CALENDARS ########################
+  #calendar 1; all gravimetric data
   # Add a new column to determine the color based on PM
   output$gcalendar<- renderPlot({
     
@@ -475,20 +536,24 @@ server <- function(input, output, session) {
         `PM2.5 Concentration (µg/m³)` >= 40 & `PM2.5 Concentration (µg/m³)` <= 140 ~ "orange",
         TRUE ~ "black"  # default color
       ))
-  
-  # PLOT ###
-  c <- ggplot(all_grav, aes(x = Day, y = Device, color = color)) +
-    geom_point(size = 2) +
-    scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", minor_breaks = "1 month") +
-    scale_color_manual(
-      name = "24-h mean PM2.5 concentration",
-      values = c("black" = "black", "orange" = "orange", "red" = "red"),
-      breaks = c("black", "orange", "red"),
-      labels = c("Less than 40 µg/m³", "40-140 µg/m³", "Greater than 140 µg/m³")) + 
-    labs(x = NULL, y = "Device", title = "Temporal Coverage of Device by Location") +
-    theme_minimal() + 
-    theme(legend.position = "top") 
-  c
+    
+  #PLOT ALL-LOCATION CALENDAR
+    c <- ggplot(all_grav, aes(x = Day, y = Device, color = color)) +
+      geom_point(size = 2) +
+      scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", minor_breaks = "1 month") +
+      scale_color_manual(
+        name = "24-h mean PM2.5 concentration",
+        values = c("black" = "black", "orange" = "orange", "red" = "red"),
+        breaks = c("black", "orange", "red"),
+        labels = c("Less than 40 µg/m³", "40-140 µg/m³", "Greater than 140 µg/m³")) + 
+      labs(x = NULL, y = "Device", title = "Temporal Coverage of Device by Location") +
+      theme_minimal() + 
+      theme(legend.position = "top",
+            strip.text = element_text(size = 8, face = "bold"),  
+            strip.placement = "outside",  
+            panel.spacing = unit(0.5, "lines")) +  
+      facet_wrap(~ Location, scales = "free_y", ncol = 1)  
+    c
   })
   
   # output$allcalendar<- renderPlot({
@@ -529,3 +594,4 @@ server <- function(input, output, session) {
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+#shiny::runGitHub('maia_shiny','mariacardelino', ref="main")
