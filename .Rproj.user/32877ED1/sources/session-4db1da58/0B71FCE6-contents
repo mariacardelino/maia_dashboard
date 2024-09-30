@@ -1,0 +1,49 @@
+# gravimetric vs. continuous ; combine datasets
+
+# Final product of gravimetric: gravi_final (correct dates)
+  # filter = "J0409"
+  # device = "AD00103"
+  # deploy_start = date "2023-11-20"
+  # gravi_con_ugm3 = PM 2.5 concentration collected
+
+# Final product of continuous: combined_data
+  # filter = "J0409"
+  # device = "s103d"
+  # day = "2022-10-26"
+  # daily_mean_pm = averaged PM for day
+
+#Join datasets on date and filter column
+matched_data <- gravi_final %>%
+  inner_join(combined_data, by = c("deploy_start" = "day", "filter" = "filter")) %>%
+  select(filter, device.x, device.y, deploy_start, gravi_con_ugm3, daily_mean_pm, checkforerror)
+
+print(matched_data)
+#result: 62 matching points
+library(ggplot2)
+library(ggbreak)
+
+p <- ggplot(matched_data, aes(x = gravi_con_ugm3, y = daily_mean_pm, color = device.x)) +
+  geom_point(size = 2.5) +
+  geom_vline(xintercept = 12, linetype = "dashed", color = "gray", size = 0.5) +
+  geom_hline(yintercept = 12, linetype = "dashed", color = "gray", size = 0.5) +
+  geom_segment(aes(x = 0, y = 0, xend = 200, yend = 200), color = "gray") +
+  labs(title = "Daily Averaged Continuous PM2.5 vs. Daily Gravimetric PM2.5 Concentrations",
+       x = "Daily Gravimetric Concentration (ug/m3)",
+       y = "Daily Averaged Continuous PM2.5 (ug/m3)",
+       color = "Device")+
+  xlim(c(0,200))+
+  ylim(c(0,200))+
+  scale_colour_brewer(palette = "Set1")
+# 5 points containing values outside scale range (outliers: device 90 for continuous and 96 for gravimetric)
+p
+
+# scale_color_manual(
+#   name = "24-h mean PM2.5 concentration (µg/m³)",
+#   values = c( "green" = "green", "blue" = "blue", "orange" = "orange","red" = "red","purple" ="purple" ),
+#   breaks = c("green", "blue", "orange", "red", "purple"),
+#   labels = c("Less than 12", "12-25", "25-70", "70-100", "Greater than 100")) + 
+#   labs(x = NULL, y = "Device", title = "Temporal Coverage of Device by Location") +
+#   theme_minimal() +
+  
+# Print the scatterplot
+print(p)

@@ -1,0 +1,12 @@
+name: CEAMS
+title: CEAMS
+username: mcardelino
+account: mcardelino
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12534900
+bundleId: 9133917
+url: https://mcardelino.shinyapps.io/CEAMS/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
