@@ -300,11 +300,11 @@ server <- function(input, output, session) {
       
       # Create a new column for color based on the condition for both flow rates
       merged_pm_data <- merged_pm_data %>%
-        mutate(color = ifelse(flow1 >= 1 & flow2 >= 1, "Both Pumps On", "At Least One Pump Off"))
+        mutate(color = ifelse(flow1 >= 1 & flow2 >= 1, "Pump On", "Pump Off"))
       
       # Calculate R-squared for both groups
-      r_squared_both_on <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Both Pumps On")))$r.squared
-      r_squared_one_off <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "At Least One Pump Off")))$r.squared
+      r_squared_both_on <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Pump On")))$r.squared
+      r_squared_one_off <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Pump Off")))$r.squared
       
       ggplot(merged_pm_data, aes(x = pm_device1, y = pm_device2, color = color)) +
         geom_point() +
@@ -315,11 +315,11 @@ server <- function(input, output, session) {
         theme_grey() +
         # Add the R-squared annotations to the plot
         annotate("text", x = Inf, y = Inf, 
-                 label = paste("R² (Both Pumps On) =", round(r_squared_both_on, 3), "\nR² (At Least One Pump Off) =", round(r_squared_one_off, 3)), 
+                 label = paste("R² Pump on =", round(r_squared_both_on, 3), "\nR² Pump off =", round(r_squared_one_off, 3)), 
                  hjust = 1.1, vjust = 1.5, 
                  size = 5, color = "black", 
                  fontface = "bold") +
-        scale_color_manual(values = c("Both Pumps On" = "blue", "At Least One Pump Off" = "red")) +
+        scale_color_manual(values = c("Pump On" = "blue", "Pump Off" = "red")) +
         theme(legend.title = element_blank())
     } else {
       ggplot() + geom_blank() +
