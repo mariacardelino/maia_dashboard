@@ -300,7 +300,7 @@ server <- function(input, output, session) {
       
       # Create a new column for color based on the condition for both flow rates
       merged_pm_data <- merged_pm_data %>%
-        mutate(color = ifelse(flow1 >= 1 & flow2 >= 1, "Pump On", "Pump Off"))
+        mutate(color = ifelse(flow1 >= 1 & flow2 >= 1, "Pump On", "Pump Off")) #change this to have more options; not informative!
       
       # Calculate R-squared for both groups
       r_squared_both_on <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Pump On")))$r.squared

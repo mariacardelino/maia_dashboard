@@ -5,7 +5,7 @@ account: mcardelino
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 12534900
-bundleId:
+bundleId: 9218366
 url: https://mcardelino.shinyapps.io/CEAMS/
 version: 1
 asMultiple: FALSE
