@@ -36,7 +36,7 @@ ui <- navbarPage(
     )
   ),
   
-  # Panel 1: Recent Continuous data
+  # Panel 1: Recent Continuous data BY LOCATION
   tabPanel(
     "Recent Plantower Data Visualization",
     fluidPage(
@@ -58,7 +58,7 @@ ui <- navbarPage(
     )
   ),
   
-  # Panel 2: Continuous Stats
+  # Panel 2: Continuous Stats BY LOCATION
   tabPanel(
     "24-hour Averaged Plantower Stats",
     fluidPage(
@@ -84,19 +84,17 @@ ui <- navbarPage(
     )
   ),
   
-  # Panel 3: Filter data
+  # Panel 3: Filter data BY LOCATION
   tabPanel(
     "Gravimetric Filter Stats",
     fluidPage(
       sidebarLayout(
         sidebarPanel(
-          h4("Gravimetric Filter Data Visualization"),
+          h4("Gravimetric Filter Data Visualization: Click to see data from selected location."),
           radioButtons("gravi_choice", "Select:",
                        choices = list(
-                         "Summary table for filters (for selected location)" = "gravi_table",
-                         "Scatterplot of Continuous vs. Gravimetric concentrations (for selected location)" = "combined_plot",
-                         "All-location summary processed filters" = "gravi_sum"
-                       ),
+                         "Summary table for filters" = "gravi_table", 
+                         "Timeseries of filter concentrations (*in progress*)" = "time_grav"),
                        selected = "gravi_table")
         ),
         mainPanel(
@@ -105,26 +103,35 @@ ui <- navbarPage(
       )
     )
   ), 
-  # Panel 4: Calendars
+# Panel 4: Summary ALL LOCATIONS
   tabPanel(
-    "Temporal Coverage",
-    fluidPage(tagList(
-      wellPanel(
-        style = "border: 1px solid #000; padding: 10px;",
-        h4("Temporal Coverage of Gravimetric Filters by Location and Device"),
-        plotOutput("gcalendar", height = 800) 
-        )
-              )
+    tags$div(
+      tags$div(style = "font-weight: bold;", "All-location Summaries")
+    ),
+    sidebarLayout(
+      sidebarPanel(
+        h4("Gravimetric and continuous data visualization for all locations"),
+        radioButtons("all_choice", "Select:",
+                     choices = list(
+                       "Scatterplot of raw continuous vs. gravimetric concentrations" = "combined_plot",
+                       "Summary for all processed filters" = "gravi_sum",
+                       "Calendar of gravimetric filters by location and device" = "calendar"),
+                     selected = "calendar")
+      ),
+      mainPanel(
+        uiOutput("sumUI")  # Dynamic UI for the combined panel
       )
+    )
   )
-) #end UI section
+) 
+# end UI section
 
 # Define server logic
 server <- function(input, output, session) {
   
   # PANEL ONE: RECENT PLOTS ##############################
     
-  # User selection combined UI #####
+  # User selection combined UI 
   output$paneloneUI <- renderUI({
     #timeseries
     if (input$plot_type == "timeseries") {
@@ -182,7 +189,7 @@ server <- function(input, output, session) {
     } 
   }) #end panel one UI
   
-  # Dynamic plot UI and rendering #####
+  # Dynamic plot UI and rendering 
   
   #Dynamic plot UI
   output$dynamicUI <- renderUI({
@@ -229,7 +236,8 @@ server <- function(input, output, session) {
       "t" = "Temperature"
     )
     
-    ggplot(data_long, aes(x = time, y = Value, color = Variable, shape = device)) +
+    ggplot(data_long, aes(x = time, y = Value, color = Variable)) +
+      facet_wrap(~device, ncol = 1, nrow =2)+
       geom_point() +
       scale_color_manual(values = color_mapping, labels = legend_labels) +
       labs(title = "Previous 2 Weeks Time Series Data", x = "Time", y = "Value") +
@@ -239,7 +247,7 @@ server <- function(input, output, session) {
   
   
   
-    # Timeseries plots for PM2.5 and meteorological data ##############
+    # Timeseries plots for PM2.5 and meteorological data #
   output$pmPlot <- renderPlot({
     selected_data <- all_recent_df %>% filter(location == input$location)
     ggplot(selected_data, aes(x = time, color = device)) +
@@ -280,7 +288,7 @@ server <- function(input, output, session) {
       theme_minimal()
   })
   
-    # Co-location plot #######################
+    # Co-location plot ##
   output$coloplot <- renderPlot({
     selected_data <- all_recent_df %>% filter(location == input$location)
     
@@ -300,12 +308,13 @@ server <- function(input, output, session) {
       
       # Create a new column for color based on the condition for both flow rates
       merged_pm_data <- merged_pm_data %>%
-        mutate(color = ifelse(flow1 >= 1 & flow2 >= 1, "Pump On", "Pump Off")) #change this to have more options; not informative!
+        mutate(color = case_when(flow1 > 1 & flow2 > 1  ~ "Pumps on",
+                                 flow1 < 1 & flow2 < 1 ~ "Pumps off"))
       
       # Calculate R-squared for both groups
-      r_squared_both_on <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Pump On")))$r.squared
-      r_squared_one_off <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Pump Off")))$r.squared
-      
+      r_squared_both_on <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Pumps on")))$r.squared
+      r_squared_one_off <- summary(lm(pm_device2 ~ pm_device1, data = merged_pm_data %>% filter(color == "Pumps off")))$r.squared
+
       ggplot(merged_pm_data, aes(x = pm_device1, y = pm_device2, color = color)) +
         geom_point() +
         labs(title = paste("Device", unique_devices[2], "vs.", unique_devices[1]),
@@ -314,12 +323,12 @@ server <- function(input, output, session) {
         geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
         theme_grey() +
         # Add the R-squared annotations to the plot
-        annotate("text", x = Inf, y = Inf, 
-                 label = paste("R² Pump on =", round(r_squared_both_on, 3), "\nR² Pump off =", round(r_squared_one_off, 3)), 
-                 hjust = 1.1, vjust = 1.5, 
-                 size = 5, color = "black", 
+        annotate("text", x = Inf, y = Inf,
+                 label = paste("R² Pumps on =", round(r_squared_both_on, 3), "\nR² Pumps off =", round(r_squared_one_off, 3)),
+                 hjust = 1.1, vjust = 1.5,
+                 size = 5, color = "black",
                  fontface = "bold") +
-        scale_color_manual(values = c("Pump On" = "blue", "Pump Off" = "red")) +
+        scale_color_manual(values = c("Pumps on" = "red", "Pumps off" = "blue")) +
         theme(legend.title = element_blank())
     } else {
       ggplot() + geom_blank() +
@@ -330,9 +339,9 @@ server <- function(input, output, session) {
   
   
   
-  ## PANEL TWO: STATS #####################################
+  ## PANEL TWO: PLANTOWER STATS #####################################
   
-  # Date range UI for the second panel ####
+  # Date range UI for the second panel ##
   output$custom_date_ui <- renderUI({
     if (input$date_range == "custom") {
       dateRangeInput("custom_dates", "Select Date Range:",
@@ -374,7 +383,7 @@ server <- function(input, output, session) {
     formatted_data # Show table
   })
   
-  # Timeseries plot for selected dates ####
+  # Timeseries plot for selected dates ##
   output$pm25_plot <- renderPlot({
     filtered_data <- all_daily %>% 
       filter(location == input$location) %>%
@@ -403,9 +412,9 @@ server <- function(input, output, session) {
   })
   
   # PANEL THREE: GRAVIMETRIC #################
-  
+
   #uiOutput: gravipanelUI (all choices), gravi_choice
-  #choices: "gravi_table", "combined_plot", "calendar"
+  #choices: "gravi_table", "time_grav"
   
     # User selection combined UI #####
     output$gravipanelUI <- renderUI({
@@ -415,25 +424,17 @@ server <- function(input, output, session) {
           h4("Gravimetric Filters Analyzed from Selected Location"),
           uiOutput("gtable")
         )
-      } else if (input$gravi_choice == "combined_plot") {
-        tagList(
-          wellPanel(
-            style = "border: 1px solid #000; padding: 10px;",
-            h4("Continuous Vs. Gravimetric PM2.5 Concentration at All Locations"),
-            plotOutput("combinedgplot"),
-            textOutput("cutoff_message")
-          )
-        )
-      } else if (input$gravi_choice == "gravi_sum") {
-        tagList(
-          h4("All-location Summary Statistics"),
-          uiOutput("sumtable")
+      } else if (input$gravi_choice == "time_grav") { 
+        wellPanel(
+          style = "border: 1px solid #000; padding: 10px;",
+          h4("Timeseries of PM2.5 Concentrations from Filters at Selected Location"),
+          plotOutput("grav_plot")
         )
       }
+        
     })
-    
   
-  # Option 1: table of data by selected location
+  #Panel 3 Option 1: table of data by selected location
   output$gtable <- renderTable({
     
     # Filter all gravimetric data by location
@@ -446,9 +447,50 @@ server <- function(input, output, session) {
 
   })
   
-  # Option 2: Continuous vs. gravimetric scatterplot
-  #Datasets: all_grav and all_daily
-  # Option 2: Continuous vs. gravimetric scatterplot
+  #Panel 3 option 2: timeseries of gravimetric - FIX LATER
+  output$grav_plot <- renderPlot ({
+    ggplot(y= `PM2.5 Concentration (µg/m³)`, x= Day, data=filtered_grav)+
+      geom_point 
+  })
+  
+
+  
+
+  
+  
+  #PANEL 4: all-location statistics ########################
+
+  # Panel 4: Summary ALL LOCATIONS
+  
+  #UI for PANEL 4:
+  # User selection combined UI #####
+  output$sumUI <- renderUI({
+    # Timeseries
+    if (input$all_choice == "combined_plot") {
+      tagList(
+        wellPanel(
+          style = "border: 1px solid #000; padding: 10px;",
+          h4("Continuous vs. Gravimetric PM2.5 Concentrations Across Locations"),
+          plotOutput("combinedgplot")
+        )
+      )
+    } else if (input$all_choice == "gravi_sum") { 
+      tagList(
+        h4("Summary of ALL processed gravimetric filters"),
+        uiOutput("sumtable")
+      )
+    } else if (input$all_choice == "calendar") {
+    tagList(
+      wellPanel(
+        style = "border: 1px solid #000; padding: 10px;",
+        h4("Temporal Coverage For Gravimetric Filters By Location and Device"),
+        plotOutput("gcalendar",height = "1000px", width = "1000px")
+      )
+    )
+    }
+  })
+
+  #Panel 4 Option 1: Continuous vs. gravimetric scatterplot #################
   output$combinedgplot <- renderPlot({
     
     filtered_all_daily <- all_daily 
@@ -509,25 +551,22 @@ server <- function(input, output, session) {
   })
   
   
-  #Option 3: Calendar and summary statistics
-  #summary table; all summary data
+  
+  #Panel 4 option 2: summary table; all gravimetric summary data ######################
   output$sumtable <- renderTable({
     
-  grav_summary <- grav_summary %>%
-    mutate(
-      `Number of valid filters` = format(round(`Number of valid filters`, digits = 0), nsmall = 0),
-      `Mean PM2.5 Concentration (µg/m³)` = format(round(`Mean PM2.5 Concentration (µg/m³)`, digits = 1), nsmall = 0),
-      `Median` = format(round(`Median`, digits = 1), nsmall = 0),
-      `75th percentile` = format(round(`75th percentile`, digits = 1), nsmall = 0),
-      `95th percentile` = format(round(`95th percentile`, digits = 1), nsmall = 0),
-      `Max` = format(round(`Max`, digits = 1), nsmall = 0))
-  grav_summary 
+    grav_summary <- grav_summary %>%
+      mutate(
+        `Number of valid filters` = format(round(`Number of valid filters`, digits = 0), nsmall = 0),
+        `Mean PM2.5 Concentration (µg/m³)` = format(round(`Mean PM2.5 Concentration (µg/m³)`, digits = 1), nsmall = 0),
+        `Median` = format(round(`Median`, digits = 1), nsmall = 0),
+        `75th percentile` = format(round(`75th percentile`, digits = 1), nsmall = 0),
+        `95th percentile` = format(round(`95th percentile`, digits = 1), nsmall = 0),
+        `Max` = format(round(`Max`, digits = 1), nsmall = 0))
+    grav_summary 
   })
   
-  
-  #PANEL 4: CALENDARS ########################
-  #calendar 1; all gravimetric data
-  # Add a new column to determine the color based on PM
+ #Panel 4 option 3: Gravimetric calendar ##############################
   output$gcalendar<- renderPlot({
     
     all_grav <- all_grav %>%
@@ -540,54 +579,27 @@ server <- function(input, output, session) {
   #PLOT ALL-LOCATION CALENDAR
     c <- ggplot(all_grav, aes(x = Day, y = Device, color = color)) +
       geom_point(size = 2) +
-      scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", minor_breaks = "1 month") +
+      facet_wrap(~Location, scales = "free_y", ncol = 1) +
+      scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", date_minor_breaks = "1 month",
+                   sec.axis = dup_axis()) +  # Add secondary x-axis
       scale_color_manual(
         name = "24-h mean PM2.5 concentration",
         values = c("black" = "black", "orange" = "orange", "red" = "red"),
         breaks = c("black", "orange", "red"),
         labels = c("Less than 40 µg/m³", "40-140 µg/m³", "Greater than 140 µg/m³")) + 
-      labs(x = NULL, y = "Device", title = "Temporal Coverage of Device by Location") +
+      labs(x = NULL, y = NULL, title = NULL) +
       theme_minimal() + 
       theme(legend.position = "top",
-            strip.text = element_text(size = 8, face = "bold"),  
+            legend.text = element_text(size = 12),
+            axis.text.x = element_text(size = 12),
+            axis.text.x.top = element_text(size = 12),  # Style for top x-axis text
+            axis.text.y = element_text(size = 9),
+            strip.text = element_text(size = 10, face = "bold"),  
             strip.placement = "outside",  
-            panel.spacing = unit(0.5, "lines")) +  
-      facet_wrap(~ Location, scales = "free_y", ncol = 1)  
+            panel.spacing = unit(1, "lines"))
     c
+    
   })
-  
-  # output$allcalendar<- renderPlot({
-  #   #calendar; all grav and daily continuous data
-  # 
-  #   g <- all_grav %>%
-  #     rename(Gravimetric = "PM2.5 Concentration (µg/m³)", 
-  #            day = "Day", 
-  #            device = "Device", 
-  #            location = "Location") 
-  #   
-  #   d <- all_daily %>%
-  #     rename(Continuous = daily_mean_pm)
-  #   
-  #   all_data <- full_join(d, g, by = "day")
-  #   
-  #   all_data_long <- all_data %>%
-  #     pivot_longer(cols = c(Gravimetric, Continuous), names_to = "Method", values_to = "Value")
-  #   
-  #   # PLOT ###
-  #   ac <- ggplot(all_data_long, aes(x = day, y = device.x, color = Method)) +
-  #     geom_point(size = 2) +
-  #     scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", minor_breaks = "1 month") +
-  #     labs(x = NULL, y = "Device", title = "Temporal Coverage of Device by Location") +
-  #     scale_color_manual(
-  #       name = "Method",
-  #       values = c("Gravimetric" = "darkblue", "Continuous" = "green"),  # Correctly mapping method names to colors
-  #       breaks = c("Gravimetric", "Continuous"),  # Ensuring the legend uses method names
-  #       labels = c("Gravimetric", "Continuous")) + 
-  #     theme_minimal() + 
-  #     theme(legend.position = "top") 
-  #   
-  #   ac
-  # })
   
 }
 # END SERVER LOGIC #######

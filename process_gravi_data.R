@@ -1,22 +1,14 @@
 #process gravimetric data for Shiny app
 
-#compare to all_daily from continuous data 
-
-#colnames(all_daily)
-#location, device, filter, dat, elapsed_time, n_readings, daily_mean_pm, daily_95_pm, daily_mean_rh, daily_mean_t
-
-# Report:
-
-# number of valid samples per site, by filter type
-# gravimetric concentrations of valid samples per country(site) and filter type
-# denote target line with 12 ug/m^3
-
-#Calendar
-#compare to Continuous
-
 rm(list = ls())
 library(pacman)
 p_load(tidyverse, openxlsx)
+
+#download latest version of gravimetric data
+url <- "https://raw.githubusercontent.com/LOrangeResearch/MAIA/refs/heads/master/maia_gravi.csv?token=GHSAT0AAAAAACXMDBUU3PFVHOFFFFCTZIF4ZYNHFSA"
+destfile <- "C:/Users/mcard/OneDrive/Documents/MAIA/Shiny/CEAMS/maia_gravi.csv"
+download.file(url, destfile, mode = "wb")
+
 setwd('C:/Users/mcard/OneDrive/Documents/MAIA/Shiny/CEAMS')
 gravi <- read_csv("maia_gravi.csv")
 
