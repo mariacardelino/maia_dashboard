@@ -18,7 +18,7 @@ jobs:
       with:
         r-version: '4.4.1'  
 
-   - name: Install renv and restore dependencies
+    - name: Install renv and restore dependencies
       run: |
         install.packages('renv')
         renv::restore()
