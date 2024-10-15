@@ -20,8 +20,8 @@ jobs:
 
     - name: Install renv and restore dependencies
       run: |
-        install.packages('renv')
-        renv::restore()
+        Rscript -e "install.packages('renv')"
+        Rscript -e "renv::restore()"
 
     - name: Deploy to shinyapps.io
       env:
