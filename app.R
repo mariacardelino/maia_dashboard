@@ -606,4 +606,3 @@ server <- function(input, output, session) {
 
 # Run the application 
 shinyApp(ui = ui, server = server)
-#shiny::runGitHub('maia_shiny','mariacardelino', ref="main")
