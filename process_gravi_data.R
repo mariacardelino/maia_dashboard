@@ -5,7 +5,7 @@ library(pacman)
 p_load(tidyverse, openxlsx)
 
 #download latest version of gravimetric data
-url <- "https://raw.githubusercontent.com/LOrangeResearch/MAIA/refs/heads/master/maia_gravi.csv?token=GHSAT0AAAAAACXMDBUU3PFVHOFFFFCTZIF4ZYNHFSA"
+url <- "https://raw.githubusercontent.com/LOrangeResearch/MAIA/refs/heads/master/maia_gravi.csv?token=GHSAT0AAAAAACXMDBUV3RTPS6LECLPUBTQ4ZY7T37Q"
 destfile <- "C:/Users/mcard/OneDrive/Documents/MAIA/Shiny/CEAMS/maia_gravi.csv"
 download.file(url, destfile, mode = "wb")
 
