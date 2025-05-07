@@ -1,5 +1,3 @@
-#### BUILD APP ----------------------------------------------
-rm(list = ls())
 library(dplyr)
 library(tidyr)
 library(lubridate)
@@ -10,9 +8,8 @@ library(readr)
 library(rsconnect)
 
 # Global variables for app
-locations <- c("Pretoria, South Africa", "Taichung, Taiwan", "Tainan, Taiwan", "Delhi, India", 
-               "Amity University Noida, India", "Amity University Manesar, India", "Adama, Ethiopia", 
-               "AASTU, Ethiopia")
+locations <- c("Atlanta", "AASTU, Ethiopia", "Adama, Ethiopia", "Amity University Manesar, India", "Amity University Noida, India",  "JPL",
+               "Pretoria, South Africa", "Sonipat, India", "Taichung, Taiwan","Tainan, Taiwan")
 
 all_recent_df <- read_csv("all_recent_data.csv", show_col_types = FALSE) #for plotting recent data
 recent_daily <- read_csv("recent_daily.csv", show_col_types = FALSE) # for recent stats
@@ -20,6 +17,7 @@ all_daily <- read_csv("all_daily.csv", show_col_types = FALSE)
 
 all_grav <- read_csv("all_grav.csv", show_col_types = FALSE) #for grav
 grav_summary <- read_csv("grav_summary.csv", show_col_types = FALSE) 
+all_data <- read.csv("all_data.csv")
 
 # Define UI
 ui <- navbarPage(
@@ -33,6 +31,16 @@ ui <- navbarPage(
                selectInput("location", "Select A Location:", choices = locations, selected = "Amity University Noida, India")
         )
       )
+    )
+  ),
+  
+  # Panel 0: Last seen?
+  tabPanel(
+    tags$div(
+      tags$div(style = "font-weight: bold;", "Last Seen?"),
+    ),
+    mainPanel(
+      uiOutput("lastseentable")
     )
   ),
   
@@ -188,6 +196,28 @@ server <- function(input, output, session) {
       )
     } 
   }) #end panel one UI
+  
+  # Latest activity table
+    output$lastseentable <- renderUI({
+      latest_data <- all_data %>%
+        group_by(location) %>%
+        summarize(latest_time = max(time, na.rm = TRUE)) %>% 
+        mutate(`Within 14 Days` = if_else(
+          latest_time >= Sys.Date() - 14, "Yes", "No"
+        )) %>%
+        arrange(desc(latest_time))
+      
+      tableOutput <- tableOutput("table")
+      
+      output$table <- renderTable({
+        latest_data %>%
+          rename("Location" = location, "Last Seen" = latest_time)
+      })
+      
+      tableOutput
+  })
+
+  
   
   # Dynamic plot UI and rendering 
   
@@ -442,12 +472,13 @@ server <- function(input, output, session) {
     filtered_grav <- filtered_grav %>% select(`Filter ID`, Device, Day, `PM2.5 Concentration (µg/m³)`, Location) %>%
       mutate(
         Day = format(as.Date(Day), "%Y-%m-%d"),
-        `PM2.5 Concentration (µg/m³)` = format(round(`PM2.5 Concentration (µg/m³)`, digits = 1), nsmall = 0))
+        `PM2.5 Concentration (µg/m³)` = format(round(`PM2.5 Concentration (µg/m³)`, digits = 1), nsmall = 0)) %>%
+      arrange(desc(Day))
     filtered_grav
 
   })
   
-  #Panel 3 option 2: timeseries of gravimetric - FIX LATER
+  #Panel 3 option 2: timeseries of gravimetric - FIX LATER 
   output$grav_plot <- renderPlot ({
     ggplot(y= `PM2.5 Concentration (µg/m³)`, x= Day, data=filtered_grav)+
       geom_point 
